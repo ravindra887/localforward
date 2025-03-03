@@ -158,7 +158,7 @@ def stop_tunnel():
 def ensure_sudo():
     if os.geteuid() != 0:
         try:
-            subprocess.check_call(['sudo', sys.executable] + sys.argv)
+            subprocess.check_call(['sudo', sys.executable] + sys.argv[1:])
             sys.exit(0)
         except subprocess.CalledProcessError as e:
             print(f"{e}")
