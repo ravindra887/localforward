@@ -2,7 +2,7 @@
 
 set -e
 
-GITHUB_USER="yourusername"
+GITHUB_USER="ravindra887"
 GITHUB_REPO="localforward"
 LATEST_RELEASE=$(curl -s https://api.github.com/repos/$GITHUB_USER/$GITHUB_REPO/releases/latest | grep "browser_download_url" | cut -d '"' -f 4)
 

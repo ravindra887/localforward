@@ -168,8 +168,11 @@ def start_ssh_tunnel(ssh_profile: str = ''):
     ssh_config = get_ssh_profile_details(ssh_profile)
     start_tunnel(ssh_config)
 
+def show_help(parser):
+    parser.print_help()
+    sys.exit(0)
+
 def main():
-    ensure_sudo()
     parser = argparse.ArgumentParser(description="Local Forwarding Utility")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -183,21 +186,29 @@ def main():
     parser_start.add_argument("profile", type=str, nargs="?", default=None, help="SSH profile to use")
 
     subparsers.add_parser("logs", help="Show SSH tunnel logs")
-
     subparsers.add_parser("stop", help="Stop the SSH tunnel")
+
+    parser_help = subparsers.add_parser("help", help="Show help information")
+    parser_help.set_defaults(func=lambda args: show_help(parser))
 
     args = parser.parse_args()
     
     if args.command == "add":
+        ensure_sudo()
         add_host(args.host)
     elif args.command == "start":
+        ensure_sudo()
         start_ssh_tunnel(args.profile)
     elif args.command == "logs":
+        ensure_sudo()
         show_logs()
     elif args.command == "stop":
+        ensure_sudo()
         stop_tunnel()
     elif args.command == "ssh-profile":
         set_default_profile(args.profile)
+    elif args.command == "help":
+        show_help(parser)
     else:
         parser.print_help()
         sys.exit(1)
