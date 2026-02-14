@@ -200,6 +200,9 @@ def main():
     elif args.command == "start":
         ensure_sudo()
         start_ssh_tunnel(args.profile)
+    elif args.command == "restart":
+        ensure_sudo()
+        restart_ssh_tunnel()
     elif args.command == "logs":
         ensure_sudo()
         show_logs()
