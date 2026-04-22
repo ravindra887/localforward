@@ -13,6 +13,27 @@ TUNNEL_PID_FILE = "/tmp/localforward_tunnel.pid"
 TUNNEL_LOG_FILE = "/tmp/localforward.log"
 TUNNEL_PROFILE_FILE = "/tmp/localforward_profile"
 
+LAUNCHDAEMON_PATH = "/Library/LaunchDaemons/com.localforward.loopback.plist"
+LAUNCHDAEMON_LABEL = "com.localforward.loopback"
+LAUNCHDAEMON_PLIST = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.localforward.loopback</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>grep '# Added by LocalForward' /etc/hosts | awk '{print $1}' | xargs -I{} ifconfig lo0 alias {}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+"""
+
 CONFIG_FILE = Path.home() / '.localforward_config.json'
 LOOPBACK_PREFIX = '127.0.0.'
 START_IP = 2
@@ -21,14 +42,11 @@ END_IP = 255
 # LocalForward tag to manage only relevant entries in /etc/hosts
 LOCALFORWARD_TAG = '# Added by LocalForward'
 
-if not CONFIG_FILE.exists():
-    CONFIG_FILE.write_text(json.dumps({'default_profile': None}))
-
-with open(CONFIG_FILE, 'r') as f:
-    config = json.load(f)
-
-def set_default_ssh_profile(profile: str):
-    config['default_profile'] = profile
+try:
+    with open(CONFIG_FILE, 'r') as f:
+        config = json.load(f)
+except FileNotFoundError:
+    config = {'default_profile': None}
     CONFIG_FILE.write_text(json.dumps(config))
 
 def execute_command(command: str):
@@ -59,22 +77,31 @@ def get_available_ip(host_name: str):
     sys.exit(1)
 
 
+def install_launchdaemon():
+    with open(LAUNCHDAEMON_PATH, 'w') as f:
+        f.write(LAUNCHDAEMON_PLIST)
+    subprocess.run(['launchctl', 'unload', LAUNCHDAEMON_PATH], capture_output=True)  # no-op if not loaded
+    result = subprocess.run(['launchctl', 'load', LAUNCHDAEMON_PATH])
+    if result.returncode != 0:
+        print('Error loading LaunchDaemon')
+        sys.exit(1)
+    print('✅ Loopback aliases will now persist across reboots')
+
 def add_host(host_name: str):
     ip_address = get_available_ip(host_name)
     print(f'Assigning {ip_address} to {host_name}')
     with open('/etc/hosts', 'a') as f:
         f.write(f'{ip_address} {host_name} {LOCALFORWARD_TAG}\n')
     execute_command(f'sudo ifconfig lo0 alias {ip_address}')
+    install_launchdaemon()
     print(f'✅ Host {host_name} added with IP {ip_address}')
     restart_ssh_tunnel()
 
 def restart_ssh_tunnel():
-    with open(TUNNEL_PID_FILE, "r") as f:
-        pid = int(f.read().strip())
-
-    if pid:
-        stop_tunnel()
-        start_ssh_tunnel()
+    if not os.path.exists(TUNNEL_PID_FILE):
+        return
+    stop_tunnel()
+    start_ssh_tunnel()
 
 def get_ssh_profile_details(ssh_profile):
     try:
@@ -84,7 +111,7 @@ def get_ssh_profile_details(ssh_profile):
             print('❌ Error: SSH profile is required. Set a default with "localforward ssh-profile {profile}" or provide with "localforward start {profile}".')
             sys.exit(1)
         
-        set_default_ssh_profile(ssh_profile)
+        set_default_profile(ssh_profile)
         ssh_config_path = os.path.expanduser("~/.ssh/config")
         if not os.path.exists(ssh_config_path):
             raise FileNotFoundError(f"{ssh_config_path} not found.")
@@ -104,7 +131,9 @@ def get_ssh_profile_details(ssh_profile):
 
 
 def start_tunnel(ssh_config: dict[str, Any | None]):
-    hostname,user, identityfile = ssh_config.values()
+    hostname = ssh_config['hostname']
+    user = ssh_config['user']
+    identityfile = ssh_config['identityfile']
 
     ssh_command = ['ssh', '-i', identityfile[0], '-v']
 
