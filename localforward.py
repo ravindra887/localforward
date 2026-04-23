@@ -130,6 +130,25 @@ def get_ssh_profile_details(ssh_profile):
         return None
 
 
+def wait_for_tunnel_ready(process: subprocess.Popen, timeout: int = 30):
+    import time
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            print(f"\n❌ SSH process exited unexpectedly (code {process.returncode}). Check logs: {TUNNEL_LOG_FILE}")
+            sys.exit(1)
+        try:
+            with open(TUNNEL_LOG_FILE, 'r') as f:
+                log = f.read()
+            if 'Entering interactive session' in log:
+                return
+        except FileNotFoundError:
+            pass
+        print('.', end='', flush=True)
+        time.sleep(1)
+    print(f"\n⚠️  Tunnel did not become ready within {timeout}s. Check logs: {TUNNEL_LOG_FILE}")
+
+
 def start_tunnel(ssh_config: dict[str, Any | None]):
     hostname = ssh_config['hostname']
     user = ssh_config['user']
@@ -148,11 +167,13 @@ def start_tunnel(ssh_config: dict[str, Any | None]):
 
     with open(TUNNEL_LOG_FILE, "w") as log_file:
         process = subprocess.Popen(ssh_command, stdout=log_file, stderr=subprocess.STDOUT)
-     
+
     with open(TUNNEL_PID_FILE, "w") as pid_file:
         pid_file.write(str(process.pid))
 
-    print(f"🔗 SSH tunnel started with PID {process.pid}, Logs available at {TUNNEL_LOG_FILE}")
+    print(f"🔗 SSH tunnel starting (PID {process.pid})", end='', flush=True)
+    wait_for_tunnel_ready(process)
+    print(f"\n✅ Tunnel ready. Logs available at {TUNNEL_LOG_FILE}")
 
 def show_logs():
     try:
