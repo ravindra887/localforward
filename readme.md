@@ -10,7 +10,7 @@ A command-line tool to manage SSH tunnels and local forwarding.
 ### Steps
 1. Run the following command to install the utility from the binary:
    ```sh
-   curl -fsSL https://github.com/ravindra887/localforward/raw/main/install.sh | bash
+   curl -fsSL https://github.com/ravindra887/localforward/raw/master/install.sh | bash
    ```
 
 ## Usage
